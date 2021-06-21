@@ -1,14 +1,17 @@
-//
-//  main.cpp
-//  Rovski
-//
-//  Created by 罗斌 on 2021/6/11.
-//
-
+#include "Rovski.hpp"
+#include <stdexcept>
 #include <iostream>
+#include <cstdlib>
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
-    return 0;
+int main() {
+    Rovski rovski;
+    rovski.Init(800, 600);
+    try{
+        rovski.Run();
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+    rovski.Clean();
+    return EXIT_SUCCESS;
 }
