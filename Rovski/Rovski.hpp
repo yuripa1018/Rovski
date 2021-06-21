@@ -65,6 +65,9 @@ private:
     bool CreateGraphicsPipeline();
     bool CreateShaderModule(const std::vector<char> &code, VkShaderModule &shaderModule);
     bool CreateRenderPass();
+    bool CreateFrameBuffer();
+    bool CreateCommandPool();
+    bool CreateCommandBuffer();
 
     
     VkInstance vkInstance;
@@ -79,12 +82,16 @@ private:
     VkQueue vkPresentQueue;
     VkPhysicalDeviceFeatures deviceFeatures{};
     VkSwapchainKHR vkSwapChain;
-    std::vector<VkImage> swapChainImages;
+    std::vector<VkImage> vkSwapChainImages;
     VkFormat vkSwapChainFormat;
     VkExtent2D vkSwapChainExtent;
-    std::vector<VkImageView> swapChainImageViews;
+    std::vector<VkImageView> vkSwapChainImageViews;
     VkRenderPass vkRenderPass;
     VkPipelineLayout vkPipelineLayout;
+    VkPipeline vkGraphicspipeline;
+    std::vector<VkFramebuffer> vkSwapChainFrameBuffers;
+    VkCommandPool vkCommandPool;
+    std::vector<VkCommandBuffer> vkCommandBuffer;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

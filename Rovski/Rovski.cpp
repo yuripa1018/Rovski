@@ -46,9 +46,14 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight) {
 }
 
 bool Rovski::Clean(){
+    vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+    for (auto frameBuffer : vkSwapChainFrameBuffers) {
+        vkDestroyFramebuffer(vkDevice, frameBuffer, nullptr);
+    }
+    vkDestroyPipeline(vkDevice, vkGraphicspipeline, nullptr);
     vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
     vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
-    for (auto view : swapChainImageViews) {
+    for (auto view : vkSwapChainImageViews) {
         vkDestroyImageView(vkDevice, view, nullptr);
     }
     vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
@@ -95,6 +100,18 @@ bool Rovski::InitVulkan(){
     }
     if(!CreateGraphicsPipeline()) {
         std::cout << "failed to create graphics pipeline" << std::endl;
+        return false;
+    }
+    if (!CreateFrameBuffer()) {
+        std::cout << "failed to create frame buffers" << std::endl;
+        return false;
+    }
+    if (!CreateCommandPool()) {
+        std::cout << "failed to create command pool" << std::endl;
+        return false;
+    }
+    if (!CreateCommandBuffer()) {
+        std::cout << "failed to create command buffer" << std::endl;
         return false;
     }
     return true;
@@ -433,17 +450,17 @@ bool Rovski::CreateSwapChain(){
     }
     uint32_t swapChainImageCount;
     vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, nullptr);
-    swapChainImages.resize(swapChainImageCount);
-    vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, swapChainImages.data());
+    vkSwapChainImages.resize(swapChainImageCount);
+    vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, vkSwapChainImages.data());
     vkSwapChainFormat = format.format;
     vkSwapChainExtent = extent;
     return true;
 }
 
 bool Rovski::CreateImageViews(){
-    swapChainImageViews.resize(swapChainImages.size());
-    for (int i = 0; i < swapChainImages.size(); i++) {
-        auto &image = swapChainImages[i];
+    vkSwapChainImageViews.resize(vkSwapChainImages.size());
+    for (int i = 0; i < vkSwapChainImages.size(); i++) {
+        auto &image = vkSwapChainImages[i];
         VkImageViewCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.image = image;
@@ -458,7 +475,7 @@ bool Rovski::CreateImageViews(){
         createInfo.subresourceRange.baseMipLevel = 0;
         createInfo.subresourceRange.levelCount = 1;
         createInfo.subresourceRange.layerCount = 1;
-        vkCreateImageView(vkDevice, &createInfo, nullptr, swapChainImageViews.data() + i);
+        vkCreateImageView(vkDevice, &createInfo, nullptr, vkSwapChainImageViews.data() + i);
     }
     return true;
 }
@@ -500,22 +517,22 @@ bool Rovski::CreateGraphicsPipeline(){
         return false;
     }
     
-    VkPipelineShaderStageCreateInfo vertCreateInfo;
+    VkPipelineShaderStageCreateInfo vertCreateInfo{};
     vertCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vertCreateInfo.module = vertShaderModule;
     vertCreateInfo.pName = "main";
     
-    VkPipelineShaderStageCreateInfo fragCreateInfo;
+    VkPipelineShaderStageCreateInfo fragCreateInfo{};
     fragCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    fragCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragCreateInfo.module = fragShaderModule;
     fragCreateInfo.pName = "main";
     
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertCreateInfo, fragCreateInfo};
     
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo{};
-    vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
     vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
     vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
@@ -540,14 +557,14 @@ bool Rovski::CreateGraphicsPipeline(){
     
     VkPipelineViewportStateCreateInfo viewportStateCreateInfo{};
     viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewportStateCreateInfo.scissorCount = 0;
+    viewportStateCreateInfo.scissorCount = 1;
     viewportStateCreateInfo.pScissors = &scissor;
-    viewportStateCreateInfo.viewportCount = 0;
+    viewportStateCreateInfo.viewportCount = 1;
     viewportStateCreateInfo.pViewports = &viewPort;
     
     VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo{};
     rasterizationStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizationStateCreateInfo.depthClampEnable = VK_TRUE;
+    rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
     rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
     rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizationStateCreateInfo.lineWidth = 1.0f;
@@ -607,7 +624,12 @@ bool Rovski::CreateGraphicsPipeline(){
     pipelineCreateInfo.layout = vkPipelineLayout;
     pipelineCreateInfo.renderPass = vkRenderPass;
     pipelineCreateInfo.subpass = 0;
-    pipelineCreateInfo
+    pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineCreateInfo.basePipelineIndex = -1;
+    
+    if(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkGraphicspipeline) != VK_SUCCESS){
+        return false;
+    }
     
     
     vkDestroyShaderModule(vkDevice, vertShaderModule, nullptr);
@@ -644,6 +666,79 @@ bool Rovski::CreateRenderPass() {
     
     if (vkCreateRenderPass(vkDevice, &renderPassCreateInfo, nullptr, &vkRenderPass) != VK_SUCCESS){
         return false;
+    }
+    
+    return true;
+}
+
+bool Rovski::CreateFrameBuffer() {
+    vkSwapChainFrameBuffers.resize(vkSwapChainImageViews.size());
+    
+    for (int i = 0; i < vkSwapChainImageViews.size(); i++) {
+        VkImageView attachments[] = {
+            vkSwapChainImageViews[i]
+        };
+        VkFramebufferCreateInfo frameBufferCreateInfo{};
+        frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        frameBufferCreateInfo.renderPass = vkRenderPass;
+        frameBufferCreateInfo.attachmentCount = 1;
+        frameBufferCreateInfo.pAttachments = attachments;
+        frameBufferCreateInfo.width = vkSwapChainExtent.width;
+        frameBufferCreateInfo.height = vkSwapChainExtent.height;
+        frameBufferCreateInfo.layers = 1;
+        if (vkCreateFramebuffer(vkDevice, &frameBufferCreateInfo, nullptr, vkSwapChainFrameBuffers.data() + i) != VK_SUCCESS) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool Rovski::CreateCommandPool() {
+    QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(vkPhysicalDevice);
+    VkCommandPoolCreateInfo commandPoolCreateInfo{};
+    commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    commandPoolCreateInfo.flags = 0;
+    
+    return vkCreateCommandPool(vkDevice, &commandPoolCreateInfo, nullptr, &vkCommandPool) == VK_SUCCESS;
+}
+
+bool Rovski::CreateCommandBuffer() {
+    vkCommandBuffer.resize(vkSwapChainFrameBuffers.size());
+    VkCommandBufferAllocateInfo commandBufferAllocInfo{};
+    commandBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferAllocInfo.commandBufferCount = static_cast<uint32_t>(vkCommandBuffer.size());
+    commandBufferAllocInfo.commandPool = vkCommandPool;
+    commandBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    
+    if(vkAllocateCommandBuffers(vkDevice, &commandBufferAllocInfo, vkCommandBuffer.data()) != VK_SUCCESS) {
+        return false;
+    }
+    
+    for (int i = 0; i < vkCommandBuffer.size(); i++) {
+        VkCommandBufferBeginInfo commandBufferBeginInfo{};
+        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBeginInfo.flags = 0;
+        commandBufferBeginInfo.pInheritanceInfo = nullptr;
+        if (vkBeginCommandBuffer(vkCommandBuffer[i], &commandBufferBeginInfo) != VK_SUCCESS) {
+            return false;
+        }
+        
+        VkRenderPassBeginInfo renderPassBeginInfo{};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass = vkRenderPass;
+        renderPassBeginInfo.framebuffer = vkSwapChainFrameBuffers[i];
+        renderPassBeginInfo.renderArea.offset = {0,0};
+        renderPassBeginInfo.renderArea.extent = vkSwapChainExtent;
+        
+        VkClearValue clearValue{0.0f,0.0f,0.0f,1.0f};
+        renderPassBeginInfo.clearValueCount = 1;
+        renderPassBeginInfo.pClearValues = &clearValue;
+        vkCmdBeginRenderPass(vkCommandBuffer[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkGraphicspipeline);
+        vkCmdDraw(vkCommandBuffer[i], 3, 1, 0, 0);
+        vkCmdEndRenderPass(vkCommandBuffer[i]);
     }
     
     return true;
