@@ -47,6 +47,7 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight) {
 
 bool Rovski::Clean(){
     vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
+    vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
     for (auto view : swapChainImageViews) {
         vkDestroyImageView(vkDevice, view, nullptr);
     }
@@ -591,6 +592,24 @@ bool Rovski::CreateGraphicsPipeline(){
         return false;
     }
     
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.stageCount = 2;
+    pipelineCreateInfo.pStages = shaderStages;
+    pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
+    pipelineCreateInfo.pInputAssemblyState = &inputAssembly;
+    pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
+    pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
+    pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
+    pipelineCreateInfo.pDepthStencilState = nullptr;
+    pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
+    pipelineCreateInfo.pDynamicState = nullptr;
+    pipelineCreateInfo.layout = vkPipelineLayout;
+    pipelineCreateInfo.renderPass = vkRenderPass;
+    pipelineCreateInfo.subpass = 0;
+    pipelineCreateInfo
+    
+    
     vkDestroyShaderModule(vkDevice, vertShaderModule, nullptr);
     vkDestroyShaderModule(vkDevice, fragShaderModule, nullptr);
     
@@ -613,6 +632,19 @@ bool Rovski::CreateRenderPass() {
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+    
+    VkRenderPassCreateInfo renderPassCreateInfo {};
+    renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassCreateInfo.attachmentCount = 1;
+    renderPassCreateInfo.pAttachments = &colorAttachment;
+    renderPassCreateInfo.subpassCount = 1;
+    renderPassCreateInfo.pSubpasses = &subpass;
+    
+    if (vkCreateRenderPass(vkDevice, &renderPassCreateInfo, nullptr, &vkRenderPass) != VK_SUCCESS){
+        return false;
+    }
     
     return true;
 }

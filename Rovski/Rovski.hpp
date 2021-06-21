@@ -83,6 +83,7 @@ private:
     VkFormat vkSwapChainFormat;
     VkExtent2D vkSwapChainExtent;
     std::vector<VkImageView> swapChainImageViews;
+    VkRenderPass vkRenderPass;
     VkPipelineLayout vkPipelineLayout;
     
     static const std::vector<const char*> deviceExtensions;
