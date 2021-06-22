@@ -36,7 +36,7 @@ public:
     Rovski();
     virtual ~Rovski();
     void Run();
-    bool Init(uint32_t windowWidth, uint32_t windowHeight);
+    bool Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrameInFlight = 2);
     bool Clean();
     static VKAPI_ATTR VkBool32 VKAPI_CALL VkApiCallDebugCallBack(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -68,6 +68,8 @@ private:
     bool CreateFrameBuffer();
     bool CreateCommandPool();
     bool CreateCommandBuffer();
+    bool CreateSyncObjects();
+    void DrawFrame();
 
     
     VkInstance vkInstance;
@@ -92,6 +94,12 @@ private:
     std::vector<VkFramebuffer> vkSwapChainFrameBuffers;
     VkCommandPool vkCommandPool;
     std::vector<VkCommandBuffer> vkCommandBuffer;
+    std::vector<VkSemaphore> vkImageAvailableSemaphore;
+    std::vector<VkSemaphore> vkRenderFinishSemaphore;
+    std::vector<VkFence> vkInFlightFences;
+    uint32_t maxFrameInFlight;
+    uint64_t currentFrame = 0;
+    std::vector<VkFence> vkImagesInFlight;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

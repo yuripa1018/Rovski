@@ -34,18 +34,26 @@ Rovski::~Rovski(){
 void Rovski::Run(){
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+        DrawFrame();
     }
+    vkDeviceWaitIdle(vkDevice);
 }
 
-bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight) {
+bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrameInFlight) {
     this->windowWidth = windowWidth;
     this->windowHeight = windowHeight;
+    this->maxFrameInFlight = maxFrameInFlight;
     InitWindow();
     InitVulkan();
     return true;
 }
 
 bool Rovski::Clean(){
+    for (int i = 0; i < maxFrameInFlight; i++) {
+        vkDestroySemaphore(vkDevice, vkImageAvailableSemaphore[i], nullptr);
+        vkDestroySemaphore(vkDevice, vkRenderFinishSemaphore[i], nullptr);
+        vkDestroyFence(vkDevice, vkInFlightFences[i], nullptr);
+    }
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
     for (auto frameBuffer : vkSwapChainFrameBuffers) {
         vkDestroyFramebuffer(vkDevice, frameBuffer, nullptr);
@@ -112,6 +120,10 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateCommandBuffer()) {
         std::cout << "failed to create command buffer" << std::endl;
+        return false;
+    }
+    if (!CreateSyncObjects()) {
+        std::cout << "failed to create semaphores" << std::endl;
         return false;
     }
     return true;
@@ -664,6 +676,17 @@ bool Rovski::CreateRenderPass() {
     renderPassCreateInfo.subpassCount = 1;
     renderPassCreateInfo.pSubpasses = &subpass;
     
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    
+    renderPassCreateInfo.dependencyCount = 1;
+    renderPassCreateInfo.pDependencies = &dependency;
+    
     if (vkCreateRenderPass(vkDevice, &renderPassCreateInfo, nullptr, &vkRenderPass) != VK_SUCCESS){
         return false;
     }
@@ -739,7 +762,64 @@ bool Rovski::CreateCommandBuffer() {
         vkCmdBindPipeline(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkGraphicspipeline);
         vkCmdDraw(vkCommandBuffer[i], 3, 1, 0, 0);
         vkCmdEndRenderPass(vkCommandBuffer[i]);
+        vkEndCommandBuffer(vkCommandBuffer[i]);
     }
     
     return true;
+}
+
+bool Rovski::CreateSyncObjects() {
+    vkImageAvailableSemaphore.resize(maxFrameInFlight);
+    vkRenderFinishSemaphore.resize(maxFrameInFlight);
+    vkInFlightFences.resize(maxFrameInFlight);
+    vkImagesInFlight.resize(vkSwapChainImageViews.size(), VK_NULL_HANDLE);
+    VkSemaphoreCreateInfo semaphoreCreateInfo{};
+    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkFenceCreateInfo fenceCreateInfo{};
+    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    for (int i = 0; i < maxFrameInFlight; i++) {
+        if (vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, vkImageAvailableSemaphore.data() + i) != VK_SUCCESS
+            || vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, vkRenderFinishSemaphore.data() + i) != VK_SUCCESS
+            || vkCreateFence(vkDevice, &fenceCreateInfo, nullptr, &vkInFlightFences[i]) != VK_SUCCESS) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Rovski::DrawFrame() {
+    uint32_t imageIndex;
+    vkWaitForFences(vkDevice, 1, &vkInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+    vkAcquireNextImageKHR(vkDevice, vkSwapChain, UINT64_MAX, vkImageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    if (vkImagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+        vkWaitForFences(vkDevice, 1, &vkImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+    vkImagesInFlight[imageIndex] = vkInFlightFences[currentFrame];
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore waitSemaphores[] = {vkImageAvailableSemaphore[currentFrame]};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = vkCommandBuffer.data() + imageIndex;
+    VkSemaphore signalSemaphores[] = {vkRenderFinishSemaphore[currentFrame]};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+    vkResetFences(vkDevice, 1, &vkInFlightFences[currentFrame]);
+    if (vkQueueSubmit(vkGraphicsQueue, 1, &submitInfo, vkInFlightFences[currentFrame]) != VK_SUCCESS) {
+        std::cout << "failed to submit queue" << std::endl;
+    }
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    VkSwapchainKHR swapChains[] = {vkSwapChain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    vkQueuePresentKHR(vkGraphicsQueue, &presentInfo);
+    currentFrame = (currentFrame+1) % maxFrameInFlight;
 }
