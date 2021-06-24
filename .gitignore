@@ -1,0 +1,6 @@
+Rovski/build/*
+Rovski.xcodeproj/xcuserdata/*
+Rovski.xcodeproj/xcuserdata
+Rovski.xcodeproj/project.xcworkspace/*
+Rovski.xcodeproj/.idea/*
+*.swp

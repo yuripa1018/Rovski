@@ -9,28 +9,31 @@
 /* Begin PBXBuildFile section */
 		AB1F2C312673928000D4DAD1 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AB1F2C302673928000D4DAD1 /* main.cpp */; };
 		AB1F2C392673939E00D4DAD1 /* libvulkan.1.2.176.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C382673939E00D4DAD1 /* libvulkan.1.2.176.dylib */; };
-		AB1F2C3B267393B700D4DAD1 /* libglfw3.a in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C3A267393B700D4DAD1 /* libglfw3.a */; };
 		AB1F2C3F267434C100D4DAD1 /* libvulkan.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C3E267434C100D4DAD1 /* libvulkan.1.dylib */; };
 		AB1F2C41267434C500D4DAD1 /* libvulkan.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C40267434C500D4DAD1 /* libvulkan.dylib */; };
-		AB1F2C45267434D700D4DAD1 /* libvulkan.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = AB1F2C44267434D700D4DAD1 /* libvulkan.dylib */; };
-		AB1F2C47267434E300D4DAD1 /* libvulkan.1.2.176.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = AB1F2C46267434E300D4DAD1 /* libvulkan.1.2.176.dylib */; };
+		AB1F2C45267434D700D4DAD1 /* libvulkan.dylib in Copy Files */ = {isa = PBXBuildFile; fileRef = AB1F2C44267434D700D4DAD1 /* libvulkan.dylib */; };
+		AB1F2C47267434E300D4DAD1 /* libvulkan.1.2.176.dylib in Copy Files */ = {isa = PBXBuildFile; fileRef = AB1F2C46267434E300D4DAD1 /* libvulkan.1.2.176.dylib */; };
 		AB1F2C4926743CD200D4DAD1 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C4826743CD200D4DAD1 /* Cocoa.framework */; };
 		AB1F2C4B26743D8C00D4DAD1 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AB1F2C4A26743D8C00D4DAD1 /* IOKit.framework */; };
-		AB1F2C4D26743EE800D4DAD1 /* libvulkan.1.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = AB1F2C4C26743EE800D4DAD1 /* libvulkan.1.dylib */; };
+		AB1F2C4D26743EE800D4DAD1 /* libvulkan.1.dylib in Copy Files */ = {isa = PBXBuildFile; fileRef = AB1F2C4C26743EE800D4DAD1 /* libvulkan.1.dylib */; };
 		AB1F2C51267451B100D4DAD1 /* Rovski.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AB1F2C4F267451B100D4DAD1 /* Rovski.cpp */; };
+		AB4977CB2680855B00309097 /* libglfw.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = AB4977CA2680855B00309097 /* libglfw.dylib */; };
+		AB4977CC2680856E00309097 /* libglfw.dylib in Copy Files */ = {isa = PBXBuildFile; fileRef = AB4977CA2680855B00309097 /* libglfw.dylib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		AB1F2C2B2673928000D4DAD1 /* CopyFiles */ = {
+		AB1F2C2B2673928000D4DAD1 /* Copy Files */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = /usr/share/man/man1;
 			dstSubfolderSpec = 0;
 			files = (
-				AB1F2C47267434E300D4DAD1 /* libvulkan.1.2.176.dylib in CopyFiles */,
-				AB1F2C4D26743EE800D4DAD1 /* libvulkan.1.dylib in CopyFiles */,
-				AB1F2C45267434D700D4DAD1 /* libvulkan.dylib in CopyFiles */,
+				AB4977CC2680856E00309097 /* libglfw.dylib in Copy Files */,
+				AB1F2C47267434E300D4DAD1 /* libvulkan.1.2.176.dylib in Copy Files */,
+				AB1F2C4D26743EE800D4DAD1 /* libvulkan.1.dylib in Copy Files */,
+				AB1F2C45267434D700D4DAD1 /* libvulkan.dylib in Copy Files */,
 			);
+			name = "Copy Files";
 			runOnlyForDeploymentPostprocessing = 1;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -55,6 +58,7 @@
 		AB1F2C4E2674403000D4DAD1 /* Rovski.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rovski.entitlements; sourceTree = "<group>"; };
 		AB1F2C4F267451B100D4DAD1 /* Rovski.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Rovski.cpp; sourceTree = "<group>"; };
 		AB1F2C50267451B100D4DAD1 /* Rovski.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Rovski.hpp; sourceTree = "<group>"; };
+		AB4977CA2680855B00309097 /* libglfw.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libglfw.dylib; path = ../../../usr/local/lib/libglfw.dylib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,7 +66,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AB1F2C3B267393B700D4DAD1 /* libglfw3.a in Frameworks */,
+				AB4977CB2680855B00309097 /* libglfw.dylib in Frameworks */,
 				AB1F2C4926743CD200D4DAD1 /* Cocoa.framework in Frameworks */,
 				AB1F2C3F267434C100D4DAD1 /* libvulkan.1.dylib in Frameworks */,
 				AB1F2C41267434C500D4DAD1 /* libvulkan.dylib in Frameworks */,
@@ -121,6 +125,7 @@
 		AB1F2C372673939E00D4DAD1 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				AB4977CA2680855B00309097 /* libglfw.dylib */,
 				AB1F2C4A26743D8C00D4DAD1 /* IOKit.framework */,
 				AB1F2C4826743CD200D4DAD1 /* Cocoa.framework */,
 				AB1F2C40267434C500D4DAD1 /* libvulkan.dylib */,
@@ -140,7 +145,7 @@
 			buildPhases = (
 				AB1F2C292673928000D4DAD1 /* Sources */,
 				AB1F2C2A2673928000D4DAD1 /* Frameworks */,
-				AB1F2C2B2673928000D4DAD1 /* CopyFiles */,
+				AB1F2C2B2673928000D4DAD1 /* Copy Files */,
 			);
 			buildRules = (
 			);
@@ -314,7 +319,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				HEADER_SEARCH_PATHS = /usr/local/include;
-				LIBRARY_SEARCH_PATHS = /usr/local/lib;
+				LIBRARY_SEARCH_PATHS = "/usr/local/lib/**";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
@@ -328,7 +333,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				HEADER_SEARCH_PATHS = /usr/local/include;
-				LIBRARY_SEARCH_PATHS = /usr/local/lib;
+				LIBRARY_SEARCH_PATHS = "/usr/local/lib/**";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
