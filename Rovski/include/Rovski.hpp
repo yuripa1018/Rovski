@@ -38,6 +38,7 @@ public:
     void Run();
     bool Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrameInFlight = 2);
     bool Clean();
+    void OnFrameBufferSized();
     static VKAPI_ATTR VkBool32 VKAPI_CALL VkApiCallDebugCallBack(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
         const VkDebugUtilsMessengerCallbackDataEXT *CallBackData, void* userData);
@@ -70,8 +71,9 @@ private:
     bool CreateCommandBuffer();
     bool CreateSyncObjects();
     void DrawFrame();
+    void RecreateSwapChain();
+    void CleanUpSwapChain();
 
-    
     VkInstance vkInstance;
     GLFWwindow* window;
     uint32_t windowWidth;
@@ -100,6 +102,7 @@ private:
     uint32_t maxFrameInFlight;
     uint64_t currentFrame = 0;
     std::vector<VkFence> vkImagesInFlight;
+    bool frameBufferResized = false;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

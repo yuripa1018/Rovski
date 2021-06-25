@@ -23,12 +23,23 @@ const std::vector<const char*> Rovski::deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+static void FrameBufferResizeCallback(GLFWwindow* window, int height, int width){
+    Rovski *rovski = reinterpret_cast<Rovski*>(glfwGetWindowUserPointer(window));
+    if (rovski != nullptr) {
+        rovski->OnFrameBufferSized();
+    }
+}
+
 Rovski::Rovski(){
     
 }
 
 Rovski::~Rovski(){
     
+}
+
+void Rovski::OnFrameBufferSized() {
+    frameBufferResized = true;
 }
 
 void Rovski::Run(){
@@ -49,22 +60,13 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
 }
 
 bool Rovski::Clean(){
+    CleanUpSwapChain();
     for (int i = 0; i < maxFrameInFlight; i++) {
         vkDestroySemaphore(vkDevice, vkImageAvailableSemaphore[i], nullptr);
         vkDestroySemaphore(vkDevice, vkRenderFinishSemaphore[i], nullptr);
         vkDestroyFence(vkDevice, vkInFlightFences[i], nullptr);
     }
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
-    for (auto frameBuffer : vkSwapChainFrameBuffers) {
-        vkDestroyFramebuffer(vkDevice, frameBuffer, nullptr);
-    }
-    vkDestroyPipeline(vkDevice, vkGraphicspipeline, nullptr);
-    vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
-    vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
-    for (auto view : vkSwapChainImageViews) {
-        vkDestroyImageView(vkDevice, view, nullptr);
-    }
-    vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
     vkDestroyDevice(vkDevice, nullptr);
     DestroyDebugMessager();
     vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
@@ -77,8 +79,10 @@ bool Rovski::Clean(){
 bool Rovski::InitWindow(){
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     window = glfwCreateWindow(windowWidth, windowHeight, "Rovski", nullptr, nullptr);
+    glfwSetFramebufferSizeCallback(window, FrameBufferResizeCallback);
+    glfwSetWindowUserPointer(window, this);
     return true;
 }
 
@@ -791,7 +795,14 @@ bool Rovski::CreateSyncObjects() {
 void Rovski::DrawFrame() {
     uint32_t imageIndex;
     vkWaitForFences(vkDevice, 1, &vkInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    vkAcquireNextImageKHR(vkDevice, vkSwapChain, UINT64_MAX, vkImageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(vkDevice, vkSwapChain, UINT64_MAX, vkImageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR){
+        RecreateSwapChain();
+        return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR){
+        std::cerr << "failed to acquire image" << std::endl;
+        return;
+    }
     if (vkImagesInFlight[imageIndex] != VK_NULL_HANDLE) {
         vkWaitForFences(vkDevice, 1, &vkImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
     }
@@ -820,6 +831,42 @@ void Rovski::DrawFrame() {
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
-    vkQueuePresentKHR(vkGraphicsQueue, &presentInfo);
+    result = vkQueuePresentKHR(vkGraphicsQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || frameBufferResized) {
+        RecreateSwapChain();
+    } else if (result != VK_SUCCESS) {
+        std::cerr << "failed to present" << std::endl;
+    }
     currentFrame = (currentFrame+1) % maxFrameInFlight;
+}
+
+void Rovski::RecreateSwapChain() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+    vkDeviceWaitIdle(vkDevice);
+    CleanUpSwapChain();
+    CreateSwapChain();
+    CreateImageViews();
+    CreateRenderPass();
+    CreateGraphicsPipeline();
+    CreateFrameBuffer();
+    CreateCommandBuffer();
+}
+
+void Rovski::CleanUpSwapChain() {
+    for (size_t i = 0; i < vkSwapChainFrameBuffers.size(); i++) {
+        vkDestroyFramebuffer(vkDevice, vkSwapChainFrameBuffers[i], nullptr);
+    }
+    vkFreeCommandBuffers(vkDevice, vkCommandPool, static_cast<uint32_t>(vkCommandBuffer.size()), vkCommandBuffer.data());
+    vkDestroyPipeline(vkDevice, vkGraphicspipeline, nullptr);
+    vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
+    vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
+    for (size_t i = 0; i < vkSwapChainImageViews.size();i++) {
+        vkDestroyImageView(vkDevice, vkSwapChainImageViews[i], nullptr);
+    }
+    vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
 }
