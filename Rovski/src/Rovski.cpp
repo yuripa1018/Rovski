@@ -13,11 +13,17 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include "BaseStructs.h"
+
+std::vector<Vertex> Vertices = {
+        {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
 
 const std::vector<const char*> Rovski::validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
-
 
 const std::vector<const char*> Rovski::deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -61,6 +67,8 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
 
 bool Rovski::Clean(){
     CleanUpSwapChain();
+    vkDestroyBuffer(vkDevice, vkVertexBuffer, nullptr);
+    vkFreeMemory(vkDevice, vkVertextBufferMemory, nullptr);
     for (int i = 0; i < maxFrameInFlight; i++) {
         vkDestroySemaphore(vkDevice, vkImageAvailableSemaphore[i], nullptr);
         vkDestroySemaphore(vkDevice, vkRenderFinishSemaphore[i], nullptr);
@@ -120,6 +128,10 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateCommandPool()) {
         std::cout << "failed to create command pool" << std::endl;
+        return false;
+    }
+    if (!CreateVertexBuffer()) {
+        std::cout << "failed to create vertex buffer" << std::endl;
         return false;
     }
     if (!CreateCommandBuffer()) {
@@ -262,6 +274,14 @@ bool Rovski::PickPhysicCard() {
     }
     if (candidates.rbegin()->first > 0) {
         vkPhysicalDevice = candidates.rbegin()->second;
+        /*
+        VkPhysicalDeviceProperties deviceProperties;
+        vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
+        std::cout << "=======================================" << std::endl;
+        std::cout << deviceProperties.limits.maxVertexInputAttributes << ", "
+        << deviceProperties.limits.maxVertexInputBindings << std::endl;
+        std::cout << "=======================================" << std::endl;
+         */
         return true;
     }
     return false;
@@ -546,13 +566,15 @@ bool Rovski::CreateGraphicsPipeline(){
     fragCreateInfo.pName = "main";
     
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertCreateInfo, fragCreateInfo};
-    
+
+    auto vertexBinding = Vertex::getBindingDescription();
+    auto vertexAttribute = Vertex::getVertexInputAttributeDescription();
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo{};
     vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-    vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+    vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+    vertexInputCreateInfo.pVertexBindingDescriptions = &vertexBinding;
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttribute.size());
+    vertexInputCreateInfo.pVertexAttributeDescriptions = vertexAttribute.data();
     
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -764,6 +786,9 @@ bool Rovski::CreateCommandBuffer() {
         renderPassBeginInfo.pClearValues = &clearValue;
         vkCmdBeginRenderPass(vkCommandBuffer[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkGraphicspipeline);
+        VkBuffer vertexBuffers[] = {vkVertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(vkCommandBuffer[i], 0, 1, vertexBuffers, offsets);
         vkCmdDraw(vkCommandBuffer[i], 3, 1, 0, 0);
         vkCmdEndRenderPass(vkCommandBuffer[i]);
         vkEndCommandBuffer(vkCommandBuffer[i]);
@@ -834,6 +859,7 @@ void Rovski::DrawFrame() {
     result = vkQueuePresentKHR(vkGraphicsQueue, &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || frameBufferResized) {
         RecreateSwapChain();
+        frameBufferResized = false;
     } else if (result != VK_SUCCESS) {
         std::cerr << "failed to present" << std::endl;
     }
@@ -869,4 +895,43 @@ void Rovski::CleanUpSwapChain() {
         vkDestroyImageView(vkDevice, vkSwapChainImageViews[i], nullptr);
     }
     vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
+}
+
+uint32_t Rovski::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties){
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &memProperties);
+    for(int i = 0; i < memProperties.memoryTypeCount; i++) {
+        if (typeFilter & (1<<i) && (properties == (memProperties.memoryTypes[i].propertyFlags & properties))) {
+            return i;
+        }
+    }
+    throw(std::runtime_error("failed to right memory type"));
+    return 0;
+}
+
+bool Rovski::CreateVertexBuffer() {
+    VkBufferCreateInfo bufferCreateInfo{};
+    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCreateInfo.size = sizeof(Vertices[0]) * Vertices.size();
+    bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if(VK_SUCCESS != vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &vkVertexBuffer)){
+        return false;
+    }
+    VkMemoryRequirements memoryRequirements;
+    vkGetBufferMemoryRequirements(vkDevice, vkVertexBuffer, &memoryRequirements);
+    VkMemoryAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memoryRequirements.size;
+    allocateInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits,
+                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(vkDevice, &allocateInfo, nullptr, &vkVertextBufferMemory) != VK_SUCCESS) {
+        return false;
+    }
+    vkBindBufferMemory(vkDevice, vkVertexBuffer, vkVertextBufferMemory, 0);
+    void *data;
+    vkMapMemory(vkDevice, vkVertextBufferMemory, 0, bufferCreateInfo.size, 0, &data);
+    memcpy(data, Vertices.data(), bufferCreateInfo.size);
+    vkUnmapMemory(vkDevice, vkVertextBufferMemory);
+    return true;
 }

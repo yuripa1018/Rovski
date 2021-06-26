@@ -82,6 +82,9 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/Users/luobin/Rovski/Rovski/include/BaseStructs.h">
+			<Option target="Rovski"/>
+		</Unit>
 		<Unit filename="/Users/luobin/Rovski/Rovski/include/Rovski.hpp">
 			<Option target="Rovski"/>
 		</Unit>
@@ -100,7 +103,7 @@
 		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3ConfigVersion.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\usr\local\lib\cmake\glfw3\"/>
 		</Unit>
-		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets-release.cmake">
+		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets-noconfig.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\usr\local\lib\cmake\glfw3\"/>
 		</Unit>
 		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets.cmake">

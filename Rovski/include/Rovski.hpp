@@ -73,6 +73,8 @@ private:
     void DrawFrame();
     void RecreateSwapChain();
     void CleanUpSwapChain();
+    bool CreateVertexBuffer();
+    uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -103,6 +105,8 @@ private:
     uint64_t currentFrame = 0;
     std::vector<VkFence> vkImagesInFlight;
     bool frameBufferResized = false;
+    VkBuffer vkVertexBuffer;
+    VkDeviceMemory vkVertextBufferMemory;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;
