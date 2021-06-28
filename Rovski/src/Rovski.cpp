@@ -16,9 +16,14 @@
 #include "BaseStructs.h"
 
 std::vector<Vertex> Vertices = {
-        {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
         {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
+
+std::vector<uint16_t> Indexes = {
+        0,1,2,2,3,0
 };
 
 const std::vector<const char*> Rovski::validationLayers = {
@@ -67,6 +72,8 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
 
 bool Rovski::Clean(){
     CleanUpSwapChain();
+    vkDestroyBuffer(vkDevice, vkIndexBuffer, nullptr);
+    vkFreeMemory(vkDevice, vkIndextBufferMemory, nullptr);
     vkDestroyBuffer(vkDevice, vkVertexBuffer, nullptr);
     vkFreeMemory(vkDevice, vkVertextBufferMemory, nullptr);
     for (int i = 0; i < maxFrameInFlight; i++) {
@@ -135,6 +142,10 @@ bool Rovski::InitVulkan(){
         std::cout << "failed to create vertex buffer" << std::endl;
         return false;
     }
+    if (!CreateIndexBuffer()) {
+        std::cout << "failed to create vertex buffer" << std::endl;
+        return false;
+    }
     if (!CreateCommandBuffer()) {
         std::cout << "failed to create command buffer" << std::endl;
         return false;
@@ -164,7 +175,7 @@ bool Rovski::CreateVkInstance(){
     for (auto ext:extRequired){
         std::cout << ext << std::endl;
     }
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (enableValidationLayers && !CheckoutValidationLayerSupport()) {
         throw std::runtime_error("validation layer is not support");
     }
@@ -276,7 +287,7 @@ bool Rovski::PickPhysicCard() {
     if (candidates.rbegin()->first > 0) {
         vkPhysicalDevice = candidates.rbegin()->second;
         /*
-        VkPhysicalDeviceProperties deviceProperties;
+        VkPhysicalDeviceProperties deviceProperties{};
         vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
         std::cout << "=======================================" << std::endl;
         std::cout << deviceProperties.limits.maxVertexInputAttributes << ", "
@@ -290,9 +301,9 @@ bool Rovski::PickPhysicCard() {
 
 int Rovski::RateDevice(VkPhysicalDevice device){
     int score = 0;
-    VkPhysicalDeviceProperties devicePropoerties;
+    VkPhysicalDeviceProperties devicePropoerties{};
     vkGetPhysicalDeviceProperties(device, &devicePropoerties);
-    VkPhysicalDeviceFeatures deviceFeatures;
+    VkPhysicalDeviceFeatures deviceFeatures{};
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
     if (devicePropoerties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
         score += 100;
@@ -762,6 +773,7 @@ bool Rovski::CreateCommandPool() {
         return false;
     }
     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.transferFamily.value();
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     return vkCreateCommandPool(vkDevice, &commandPoolCreateInfo, nullptr, &vkTransferCommandPool) == VK_SUCCESS;
 }
 
@@ -801,7 +813,8 @@ bool Rovski::CreateCommandBuffer() {
         VkBuffer vertexBuffers[] = {vkVertexBuffer};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(vkCommandBuffer[i], 0, 1, vertexBuffers, offsets);
-        vkCmdDraw(vkCommandBuffer[i], 3, 1, 0, 0);
+        vkCmdBindIndexBuffer(vkCommandBuffer[i], vkIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(vkCommandBuffer[i], static_cast<uint32_t>(Indexes.size()), 1, 0, 0, 0);
         vkCmdEndRenderPass(vkCommandBuffer[i]);
         vkEndCommandBuffer(vkCommandBuffer[i]);
     }
@@ -923,21 +936,32 @@ uint32_t Rovski::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags prope
 
 bool Rovski::CreateVertexBuffer() {
     VkDeviceSize size = sizeof(Vertices[0]) * Vertices.size();
-    CreateBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vkVertexBuffer, vkVertextBufferMemory);
+    VkBuffer stageBuffer;
+    VkDeviceMemory stageBufferMemory;
+    CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 stageBuffer, stageBufferMemory, false);
     void *data;
-    vkMapMemory(vkDevice, vkVertextBufferMemory, 0, size, 0, &data);
+    vkMapMemory(vkDevice, stageBufferMemory, 0, size, 0, &data);
     memcpy(data, Vertices.data(), size);
-    vkUnmapMemory(vkDevice, vkVertextBufferMemory);
+    vkUnmapMemory(vkDevice, stageBufferMemory);
+
+    CreateBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 vkVertexBuffer, vkVertextBufferMemory, false);
+    CopyBuffer(vkVertexBuffer, stageBuffer, size);
+    vkDestroyBuffer(vkDevice, stageBuffer, nullptr);
+    vkFreeMemory(vkDevice, stageBufferMemory, nullptr);
     return true;
 }
 
-bool Rovski::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+bool Rovski::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool needTransfer) {
     VkBufferCreateInfo bufferCreateInfo{};
     bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferCreateInfo.size = size;
     bufferCreateInfo.usage = usage;
     auto indices = FindQueueFamilies(vkPhysicalDevice);
-    if (indices.graphicsFamily.value() == indices.transferFamily.value()) {
+    if (!needTransfer || indices.graphicsFamily.value() == indices.transferFamily.value()) {
         bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     } else {
         bufferCreateInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -958,6 +982,53 @@ bool Rovski::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
     if (vkAllocateMemory(vkDevice, &allocateInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
         return false;
     }
-    vkBindBufferMemory(vkDevice, vkVertexBuffer, vkVertextBufferMemory, 0);
+    vkBindBufferMemory(vkDevice, buffer, bufferMemory, 0);
+    return true;
+}
+
+bool Rovski::CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo{};
+    cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdBufferAllocInfo.commandBufferCount = 1;
+    cmdBufferAllocInfo.commandPool = vkTransferCommandPool;
+    cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    VkCommandBuffer commandBuffer{};
+    vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &commandBuffer);
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    VkBufferCopy copyRegion{};
+    copyRegion.size = size;
+    copyRegion.dstOffset = 0;
+    copyRegion.srcOffset = 0;
+    vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
+    vkEndCommandBuffer(commandBuffer);
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    vkQueueSubmit(vkTransferQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(vkTransferQueue);
+    return true;
+}
+bool Rovski::CreateIndexBuffer() {
+    VkDeviceSize size = sizeof(Indexes[0]) * Indexes.size();
+    VkBuffer stageBuffer;
+    VkDeviceMemory stageBufferMemory;
+    CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 stageBuffer, stageBufferMemory, false);
+    void *data;
+    vkMapMemory(vkDevice, stageBufferMemory, 0, size, 0, &data);
+    memcpy(data, Indexes.data(), size);
+    vkUnmapMemory(vkDevice, stageBufferMemory);
+
+    CreateBuffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 vkIndexBuffer, vkIndextBufferMemory, false);
+    CopyBuffer(vkIndexBuffer, stageBuffer, size);
+    vkDestroyBuffer(vkDevice, stageBuffer, nullptr);
+    vkFreeMemory(vkDevice, stageBufferMemory, nullptr);
     return true;
 }

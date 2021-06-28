@@ -75,8 +75,10 @@ private:
     void RecreateSwapChain();
     void CleanUpSwapChain();
     bool CreateVertexBuffer();
+    bool CreateIndexBuffer();
     uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-    bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool needTransfer);
+    bool CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size);
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -110,6 +112,8 @@ private:
     bool frameBufferResized = false;
     VkBuffer vkVertexBuffer;
     VkDeviceMemory vkVertextBufferMemory;
+    VkBuffer vkIndexBuffer;
+    VkDeviceMemory vkIndextBufferMemory;
     VkCommandPool vkTransferCommandPool;
     
     static const std::vector<const char*> deviceExtensions;
