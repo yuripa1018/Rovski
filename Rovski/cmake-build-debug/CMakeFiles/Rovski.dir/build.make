@@ -113,7 +113,7 @@ Rovski_EXTERNAL_OBJECTS =
 Rovski: CMakeFiles/Rovski.dir/src/Rovski.cpp.o
 Rovski: CMakeFiles/Rovski.dir/src/main.cpp.o
 Rovski: CMakeFiles/Rovski.dir/build.make
-Rovski: /usr/local/lib/libglfw3.a
+Rovski: /usr/local/lib/libglfw.3.3.dylib
 Rovski: /usr/local/lib/libvulkan.dylib
 Rovski: CMakeFiles/Rovski.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/luobin/Rovski/Rovski/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable Rovski"

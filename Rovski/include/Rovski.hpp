@@ -25,9 +25,10 @@ struct SwapChainSupportDetail{
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
+    std::optional<uint32_t> transferFamily;
 
     bool isComplete() {
-        return graphicsFamily.has_value() && presentFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value() && transferFamily.has_value();
     }
 };
 
@@ -75,6 +76,7 @@ private:
     void CleanUpSwapChain();
     bool CreateVertexBuffer();
     uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -86,6 +88,7 @@ private:
     VkDevice vkDevice;
     VkQueue vkGraphicsQueue;
     VkQueue vkPresentQueue;
+    VkQueue vkTransferQueue;
     VkPhysicalDeviceFeatures deviceFeatures{};
     VkSwapchainKHR vkSwapChain;
     std::vector<VkImage> vkSwapChainImages;
@@ -107,6 +110,7 @@ private:
     bool frameBufferResized = false;
     VkBuffer vkVertexBuffer;
     VkDeviceMemory vkVertextBufferMemory;
+    VkCommandPool vkTransferCommandPool;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

@@ -75,6 +75,7 @@ bool Rovski::Clean(){
         vkDestroyFence(vkDevice, vkInFlightFences[i], nullptr);
     }
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+    vkDestroyCommandPool(vkDevice, vkTransferCommandPool, nullptr);
     vkDestroyDevice(vkDevice, nullptr);
     DestroyDebugMessager();
     vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
@@ -334,6 +335,12 @@ QueueFamilyIndices Rovski::FindQueueFamilies(VkPhysicalDevice device) {
         if (presentSupport){
             indices.presentFamily = i;
         }
+        if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+            indices.transferFamily = i;
+        }
+        if (indices.isComplete()) {
+            break;
+        }
         i++;
     }
     return indices;
@@ -346,7 +353,7 @@ bool Rovski::CreateLogicalDevice(){
         return false;
     }
     
-    std::set<uint32_t> uniqueQueueFamilies = {queueFamily.graphicsFamily.value(), queueFamily.presentFamily.value()};
+    std::set<uint32_t> uniqueQueueFamilies = {queueFamily.graphicsFamily.value(), queueFamily.presentFamily.value(), queueFamily.transferFamily.value()};
     std::vector<VkDeviceQueueCreateInfo> queueInfos;
     for (auto family : uniqueQueueFamilies) {
         VkDeviceQueueCreateInfo queueCreateInfo{};
@@ -376,7 +383,8 @@ bool Rovski::CreateLogicalDevice(){
     
     vkGetDeviceQueue(vkDevice, queueFamily.graphicsFamily.value(), 0, &vkGraphicsQueue);
     vkGetDeviceQueue(vkDevice, queueFamily.presentFamily.value(), 0, &vkPresentQueue);
-    
+    vkGetDeviceQueue(vkDevice, queueFamily.transferFamily.value(), 0, &vkTransferQueue);
+
     return true;
 }
 
@@ -466,10 +474,10 @@ bool Rovski::CreateSwapChain(){
     swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     
     QueueFamilyIndices indices = FindQueueFamilies(vkPhysicalDevice);
-    if (indices.graphicsFamily != indices.presentFamily) {
+    if (indices.graphicsFamily != indices.presentFamily || indices.transferFamily != indices.graphicsFamily) {
         swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         swapChainCreateInfo.queueFamilyIndexCount = 2;
-        uint32_t queueFamilyIndeices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+        uint32_t queueFamilyIndeices[] = {indices.graphicsFamily.value(), indices.presentFamily.value(), indices.transferFamily.value()};
         swapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndeices;
     } else {
         swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -750,7 +758,11 @@ bool Rovski::CreateCommandPool() {
     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
     commandPoolCreateInfo.flags = 0;
     
-    return vkCreateCommandPool(vkDevice, &commandPoolCreateInfo, nullptr, &vkCommandPool) == VK_SUCCESS;
+    if (vkCreateCommandPool(vkDevice, &commandPoolCreateInfo, nullptr, &vkCommandPool) != VK_SUCCESS){
+        return false;
+    }
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.transferFamily.value();
+    return vkCreateCommandPool(vkDevice, &commandPoolCreateInfo, nullptr, &vkTransferCommandPool) == VK_SUCCESS;
 }
 
 bool Rovski::CreateCommandBuffer() {
@@ -910,28 +922,42 @@ uint32_t Rovski::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags prope
 }
 
 bool Rovski::CreateVertexBuffer() {
+    VkDeviceSize size = sizeof(Vertices[0]) * Vertices.size();
+    CreateBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vkVertexBuffer, vkVertextBufferMemory);
+    void *data;
+    vkMapMemory(vkDevice, vkVertextBufferMemory, 0, size, 0, &data);
+    memcpy(data, Vertices.data(), size);
+    vkUnmapMemory(vkDevice, vkVertextBufferMemory);
+    return true;
+}
+
+bool Rovski::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
     VkBufferCreateInfo bufferCreateInfo{};
     bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size = sizeof(Vertices[0]) * Vertices.size();
-    bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    if(VK_SUCCESS != vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &vkVertexBuffer)){
+    bufferCreateInfo.size = size;
+    bufferCreateInfo.usage = usage;
+    auto indices = FindQueueFamilies(vkPhysicalDevice);
+    if (indices.graphicsFamily.value() == indices.transferFamily.value()) {
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    } else {
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+        bufferCreateInfo.queueFamilyIndexCount = 2;
+        bufferCreateInfo.pQueueFamilyIndices = std::array<std::remove_pointer<decltype(bufferCreateInfo.pQueueFamilyIndices)>::type, 2>{
+                indices.graphicsFamily.value(), indices.transferFamily.value()}.data();
+    }
+    if(VK_SUCCESS != vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &buffer)){
         return false;
     }
     VkMemoryRequirements memoryRequirements;
-    vkGetBufferMemoryRequirements(vkDevice, vkVertexBuffer, &memoryRequirements);
+    vkGetBufferMemoryRequirements(vkDevice, buffer, &memoryRequirements);
     VkMemoryAllocateInfo allocateInfo{};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocateInfo.allocationSize = memoryRequirements.size;
     allocateInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits,
-                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (vkAllocateMemory(vkDevice, &allocateInfo, nullptr, &vkVertextBufferMemory) != VK_SUCCESS) {
+                                                  properties);
+    if (vkAllocateMemory(vkDevice, &allocateInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
         return false;
     }
     vkBindBufferMemory(vkDevice, vkVertexBuffer, vkVertextBufferMemory, 0);
-    void *data;
-    vkMapMemory(vkDevice, vkVertextBufferMemory, 0, bufferCreateInfo.size, 0, &data);
-    memcpy(data, Vertices.data(), bufferCreateInfo.size);
-    vkUnmapMemory(vkDevice, vkVertextBufferMemory);
     return true;
 }

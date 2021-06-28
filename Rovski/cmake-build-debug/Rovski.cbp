@@ -103,7 +103,7 @@
 		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3ConfigVersion.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\usr\local\lib\cmake\glfw3\"/>
 		</Unit>
-		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets-noconfig.cmake">
+		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets-release.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\usr\local\lib\cmake\glfw3\"/>
 		</Unit>
 		<Unit filename="/Users/luobin/Rovski/Rovski/../../../../usr/local/lib/cmake/glfw3/glfw3Targets.cmake">
