@@ -79,6 +79,7 @@ private:
     uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool needTransfer);
     bool CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size);
+    bool CreateDescriptorLayout();
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -98,8 +99,9 @@ private:
     VkExtent2D vkSwapChainExtent;
     std::vector<VkImageView> vkSwapChainImageViews;
     VkRenderPass vkRenderPass;
+    VkDescriptorSetLayout vkDescriptorSetLayout;
     VkPipelineLayout vkPipelineLayout;
-    VkPipeline vkGraphicspipeline;
+    VkPipeline vkGraphicsPipeline;
     std::vector<VkFramebuffer> vkSwapChainFrameBuffers;
     VkCommandPool vkCommandPool;
     std::vector<VkCommandBuffer> vkCommandBuffer;

@@ -26,6 +26,12 @@ std::vector<uint16_t> Indexes = {
         0,1,2,2,3,0
 };
 
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 prj;
+};
+
 const std::vector<const char*> Rovski::validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
@@ -126,7 +132,11 @@ bool Rovski::InitVulkan(){
         std::cout << "failed to create render pass" << std::endl;
         return false;
     }
-    if(!CreateGraphicsPipeline()) {
+    if (!CreateDescriptorLayout()) {
+        std::cout << "failed to create descriptor pipeline" << std::endl;
+        return false;
+    }
+    if (!CreateGraphicsPipeline()) {
         std::cout << "failed to create graphics pipeline" << std::endl;
         return false;
     }
@@ -661,6 +671,8 @@ bool Rovski::CreateGraphicsPipeline(){
     
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
     pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &vkDescriptorSetLayout;
     
     if(vkCreatePipelineLayout(vkDevice, &pipelineLayoutCreateInfo, nullptr, &vkPipelineLayout) != VK_SUCCESS) {
         return false;
@@ -683,8 +695,8 @@ bool Rovski::CreateGraphicsPipeline(){
     pipelineCreateInfo.subpass = 0;
     pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineCreateInfo.basePipelineIndex = -1;
-    
-    if(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkGraphicspipeline) != VK_SUCCESS){
+
+    if(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkGraphicsPipeline) != VK_SUCCESS){
         return false;
     }
     
@@ -809,7 +821,7 @@ bool Rovski::CreateCommandBuffer() {
         renderPassBeginInfo.clearValueCount = 1;
         renderPassBeginInfo.pClearValues = &clearValue;
         vkCmdBeginRenderPass(vkCommandBuffer[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkGraphicspipeline);
+        vkCmdBindPipeline(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkGraphicsPipeline);
         VkBuffer vertexBuffers[] = {vkVertexBuffer};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(vkCommandBuffer[i], 0, 1, vertexBuffers, offsets);
@@ -913,7 +925,7 @@ void Rovski::CleanUpSwapChain() {
         vkDestroyFramebuffer(vkDevice, vkSwapChainFrameBuffers[i], nullptr);
     }
     vkFreeCommandBuffers(vkDevice, vkCommandPool, static_cast<uint32_t>(vkCommandBuffer.size()), vkCommandBuffer.data());
-    vkDestroyPipeline(vkDevice, vkGraphicspipeline, nullptr);
+    vkDestroyPipeline(vkDevice, vkGraphicsPipeline, nullptr);
     vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
     vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
     for (size_t i = 0; i < vkSwapChainImageViews.size();i++) {
@@ -1030,5 +1042,23 @@ bool Rovski::CreateIndexBuffer() {
     CopyBuffer(vkIndexBuffer, stageBuffer, size);
     vkDestroyBuffer(vkDevice, stageBuffer, nullptr);
     vkFreeMemory(vkDevice, stageBufferMemory, nullptr);
+    return true;
+}
+
+bool Rovski::CreateDescriptorLayout() {
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    VkDescriptorSetLayoutCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    createInfo.bindingCount = 1;
+    createInfo.pBindings = &uboLayoutBinding;
+    if (vkCreateDescriptorSetLayout(vkDevice, &createInfo, nullptr, &vkDescriptorSetLayout)!=VK_SUCCESS) {
+        return false;
+    }
+
+
     return true;
 }
