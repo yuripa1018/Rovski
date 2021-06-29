@@ -14,6 +14,9 @@
 #include <cstdint>
 #include <fstream>
 #include "BaseStructs.h"
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 std::vector<Vertex> Vertices = {
         {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
@@ -60,7 +63,9 @@ void Rovski::OnFrameBufferSized() {
 }
 
 void Rovski::Run(){
+    auto currentTime = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)) {
+
         glfwPollEvents();
         DrawFrame();
     }
@@ -73,6 +78,7 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
     this->maxFrameInFlight = maxFrameInFlight;
     InitWindow();
     InitVulkan();
+    startTime = std::chrono::high_resolution_clock::now();
     return true;
 }
 
@@ -154,6 +160,10 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateIndexBuffer()) {
         std::cout << "failed to create vertex buffer" << std::endl;
+        return false;
+    }
+    if (!CreateUniformBuffers()){
+        std::cout << "failed to create uniform buffer" << std::endl;
         return false;
     }
     if (!CreateCommandBuffer()) {
@@ -869,6 +879,8 @@ void Rovski::DrawFrame() {
         vkWaitForFences(vkDevice, 1, &vkImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
     }
     vkImagesInFlight[imageIndex] = vkInFlightFences[currentFrame];
+    UpdateUniformBuffer(imageIndex);
+
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     VkSemaphore waitSemaphores[] = {vkImageAvailableSemaphore[currentFrame]};
@@ -912,11 +924,13 @@ void Rovski::RecreateSwapChain() {
     }
     vkDeviceWaitIdle(vkDevice);
     CleanUpSwapChain();
+    vkDestroyDescriptorSetLayout(vkDevice, vkDescriptorSetLayout, nullptr);
     CreateSwapChain();
     CreateImageViews();
     CreateRenderPass();
     CreateGraphicsPipeline();
     CreateFrameBuffer();
+    CreateUniformBuffers();
     CreateCommandBuffer();
 }
 
@@ -930,6 +944,8 @@ void Rovski::CleanUpSwapChain() {
     vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
     for (size_t i = 0; i < vkSwapChainImageViews.size();i++) {
         vkDestroyImageView(vkDevice, vkSwapChainImageViews[i], nullptr);
+        vkDestroyBuffer(vkDevice, vkUniformBuffers[i], nullptr);
+        vkFreeMemory(vkDevice, vkUniformBuffersMemory[i], nullptr);
     }
     vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
 }
@@ -1061,4 +1077,37 @@ bool Rovski::CreateDescriptorLayout() {
 
 
     return true;
+}
+
+bool Rovski::CreateUniformBuffers() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+    vkUniformBuffers.resize(bufferSize);
+    vkUniformBuffersMemory.resize(bufferSize);
+    for (int i = 0; i < vkSwapChainImages.size(); i++) {
+        if (!CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vkUniformBuffers[i], vkUniformBuffersMemory[i], false)){
+            return false;
+        }
+    }
+    return true;
+}
+
+void Rovski::UpdateUniformBuffer(uint32_t imageIndex) {
+    UniformBufferObject ubo{};
+    ubo.model = glm::rotate(glm::mat4(1), glm::radians(90.0f)*static_cast<float>(currentTimeFromStart), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.prj = glm::perspective(glm::radians(45.0f), static_cast<float>(vkSwapChainExtent.width)/vkSwapChainExtent.height,
+                               0.1f, 10.0f);
+    ubo.prj[1][1] *= -1;
+    void *data;
+    vkMapMemory(vkDevice, vkUniformBuffersMemory[imageIndex], 0, sizeof(ubo), 0, &data);
+    memcpy(data, &ubo, sizeof(ubo));
+    vkUnmapMemory(vkDevice, vkUniformBuffersMemory[imageIndex]);
+}
+
+void Rovski::UpdateTime() {
+    currentTime = std::chrono::high_resolution_clock::now();
+    preFrameTimeFromStart = currentTimeFromStart;
+    currentTimeFromStart = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
+    deltaTime = currentTimeFromStart - preFrameTimeFromStart;
 }

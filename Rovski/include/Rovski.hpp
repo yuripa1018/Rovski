@@ -15,6 +15,9 @@
 #include <vector>
 #include <optional>
 #include <string>
+#include <chrono>
+
+using TimePointType = decltype(std::chrono::high_resolution_clock::now());
 
 struct SwapChainSupportDetail{
     VkSurfaceCapabilitiesKHR Capbilities;
@@ -80,6 +83,9 @@ private:
     bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool needTransfer);
     bool CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size);
     bool CreateDescriptorLayout();
+    bool CreateUniformBuffers();
+    void UpdateUniformBuffer(uint32_t imageIndex);
+    void UpdateTime();
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -117,6 +123,13 @@ private:
     VkBuffer vkIndexBuffer;
     VkDeviceMemory vkIndextBufferMemory;
     VkCommandPool vkTransferCommandPool;
+    std::vector<VkDeviceMemory> vkUniformBuffersMemory;
+    std::vector<VkBuffer> vkUniformBuffers;
+    TimePointType startTime;
+    TimePointType currentTime;
+    double currentTimeFromStart = 0;
+    double preFrameTimeFromStart = 0;
+    double deltaTime = 0;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;
