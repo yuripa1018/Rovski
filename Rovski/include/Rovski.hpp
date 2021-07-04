@@ -86,6 +86,8 @@ private:
     bool CreateUniformBuffers();
     void UpdateUniformBuffer(uint32_t imageIndex);
     void UpdateTime();
+    bool CreateDescriptorPool();
+    bool CreateDescriptorSet();
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -130,6 +132,8 @@ private:
     double currentTimeFromStart = 0;
     double preFrameTimeFromStart = 0;
     double deltaTime = 0;
+    VkDescriptorPool  vkDescriptorPool;
+    std::vector<VkDescriptorSet> vkDescriptorSet;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

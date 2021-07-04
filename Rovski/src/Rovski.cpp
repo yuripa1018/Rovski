@@ -30,9 +30,9 @@ std::vector<uint16_t> Indexes = {
 };
 
 struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 prj;
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 prj;
 };
 
 const std::vector<const char*> Rovski::validationLayers = {
@@ -65,7 +65,7 @@ void Rovski::OnFrameBufferSized() {
 void Rovski::Run(){
     auto currentTime = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)) {
-
+        UpdateTime();
         glfwPollEvents();
         DrawFrame();
     }
@@ -164,6 +164,14 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateUniformBuffers()){
         std::cout << "failed to create uniform buffer" << std::endl;
+        return false;
+    }
+    if (!CreateDescriptorPool()) {
+        std::cout << "failed to create descriptor pool" << std::endl;
+        return false;
+    }
+    if (!CreateDescriptorSet()) {
+        std::cout << "failed to create descriptor set" << std::endl;
         return false;
     }
     if (!CreateCommandBuffer()) {
@@ -646,7 +654,7 @@ bool Rovski::CreateGraphicsPipeline(){
     rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizationStateCreateInfo.lineWidth = 1.0f;
     rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
     
     VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo{};
@@ -836,6 +844,7 @@ bool Rovski::CreateCommandBuffer() {
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(vkCommandBuffer[i], 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(vkCommandBuffer[i], vkIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindDescriptorSets(vkCommandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, vkPipelineLayout, 0, 1, &vkDescriptorSet[i], 0, nullptr);
         vkCmdDrawIndexed(vkCommandBuffer[i], static_cast<uint32_t>(Indexes.size()), 1, 0, 0, 0);
         vkCmdEndRenderPass(vkCommandBuffer[i]);
         vkEndCommandBuffer(vkCommandBuffer[i]);
@@ -931,6 +940,8 @@ void Rovski::RecreateSwapChain() {
     CreateGraphicsPipeline();
     CreateFrameBuffer();
     CreateUniformBuffers();
+    CreateDescriptorPool();
+    CreateDescriptorSet();
     CreateCommandBuffer();
 }
 
@@ -947,6 +958,7 @@ void Rovski::CleanUpSwapChain() {
         vkDestroyBuffer(vkDevice, vkUniformBuffers[i], nullptr);
         vkFreeMemory(vkDevice, vkUniformBuffersMemory[i], nullptr);
     }
+    vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
     vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
 }
 
@@ -1074,8 +1086,6 @@ bool Rovski::CreateDescriptorLayout() {
     if (vkCreateDescriptorSetLayout(vkDevice, &createInfo, nullptr, &vkDescriptorSetLayout)!=VK_SUCCESS) {
         return false;
     }
-
-
     return true;
 }
 
@@ -1111,3 +1121,51 @@ void Rovski::UpdateTime() {
     currentTimeFromStart = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
     deltaTime = currentTimeFromStart - preFrameTimeFromStart;
 }
+
+bool Rovski::CreateDescriptorPool() {
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = static_cast<uint32_t>(vkSwapChainImages.size());
+    VkDescriptorPoolCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    createInfo.poolSizeCount = 1;
+    createInfo.pPoolSizes = &poolSize;
+    createInfo.maxSets = static_cast<uint32_t>(vkSwapChainImages.size());
+    if (VK_SUCCESS != vkCreateDescriptorPool(vkDevice, &createInfo, nullptr, &vkDescriptorPool)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool Rovski::CreateDescriptorSet() {
+    std::vector<VkDescriptorSetLayout> layout(vkSwapChainImages.size(), vkDescriptorSetLayout);
+    VkDescriptorSetAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocateInfo.descriptorPool = vkDescriptorPool;
+    allocateInfo.descriptorSetCount = static_cast<uint32_t>(vkSwapChainImages.size());
+    allocateInfo.pSetLayouts = layout.data();
+
+    vkDescriptorSet.resize(vkSwapChainImages.size());
+    if(vkAllocateDescriptorSets(vkDevice, &allocateInfo, vkDescriptorSet.data()) != VK_SUCCESS) {
+        return false;
+    }
+    for (int i = 0; i < vkSwapChainImages.size(); i++) {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = vkUniformBuffers[i];
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(UniformBufferObject);
+        VkWriteDescriptorSet descritorSet{};
+        descritorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descritorSet.dstSet = vkDescriptorSet[i];
+        descritorSet.dstBinding = 0;
+        descritorSet.dstArrayElement = 0;
+        descritorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descritorSet.descriptorCount = 1;
+        descritorSet.pBufferInfo = &bufferInfo;
+        descritorSet.pImageInfo = nullptr;
+        descritorSet.pTexelBufferView = nullptr;
+        vkUpdateDescriptorSets(vkDevice, 1, &descritorSet, 0, nullptr);
+    }
+}
+
