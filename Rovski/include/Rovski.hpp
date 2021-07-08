@@ -88,6 +88,7 @@ private:
     void UpdateTime();
     bool CreateDescriptorPool();
     bool CreateDescriptorSet();
+    bool CreateTextureImage();
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -134,6 +135,8 @@ private:
     double deltaTime = 0;
     VkDescriptorPool  vkDescriptorPool;
     std::vector<VkDescriptorSet> vkDescriptorSet;
+    VkImage vkTextureImage;
+    VkDeviceMemory vkTextureMemory;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

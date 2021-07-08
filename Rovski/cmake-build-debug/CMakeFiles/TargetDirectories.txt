@@ -1,3 +1,0 @@
-/Users/luobin/Rovski/Rovski/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/Users/luobin/Rovski/Rovski/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/luobin/Rovski/Rovski/cmake-build-debug/CMakeFiles/Rovski.dir

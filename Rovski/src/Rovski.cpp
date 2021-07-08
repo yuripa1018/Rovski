@@ -17,6 +17,8 @@
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 std::vector<Vertex> Vertices = {
         {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
@@ -152,6 +154,10 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateCommandPool()) {
         std::cout << "failed to create command pool" << std::endl;
+        return false;
+    }
+    if (!CreateTextureImage()) {
+        std::cout << "failed to create texture image" << std::endl;
         return false;
     }
     if (!CreateVertexBuffer()) {
@@ -1167,5 +1173,49 @@ bool Rovski::CreateDescriptorSet() {
         descritorSet.pTexelBufferView = nullptr;
         vkUpdateDescriptorSets(vkDevice, 1, &descritorSet, 0, nullptr);
     }
+    return true;
 }
 
+bool Rovski::CreateTextureImage() {
+    int texHeight, texWidth, texChannels;
+    stbi_uc* pixels = stbi_load("/Users/luobin/Rovski/Rovski/Texture/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    VkDeviceSize imageSize = texWidth * texHeight * texChannels;
+    if (!pixels) {
+        return false;
+    }
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingMemory;
+    CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 stagingBuffer, stagingMemory, false);
+    void *data;
+    vkMapMemory(vkDevice, stagingMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixels, imageSize);
+    vkUnmapMemory(vkDevice, stagingMemory);
+    stbi_image_free(pixels);
+    VkImageCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    createInfo.imageType = VK_IMAGE_TYPE_2D;
+    createInfo.extent.depth = 1;
+    createInfo.extent.width = texWidth;
+    createInfo.extent.height = texHeight;
+    createInfo.mipLevels = 1;
+    createInfo.arrayLayers = 1;
+    createInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    createInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    createInfo.flags = 0;
+    if (vkCreateImage(vkDevice, &createInfo, nullptr, &vkTextureImage) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements memoryRequirements{};
+    vkGetImageMemoryRequirements(vkDevice, vkTextureImage, &memoryRequirements);
+    VkMemoryAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memoryRequirements.size;
+    allocateInfo.memoryTypeIndex = FindMemoryType()
+    return true;
+}

@@ -1,4 +1,5 @@
 Rovski/build/*
+Rovski/cmake-build-debug/*
 Rovski.xcodeproj/xcuserdata/*
 Rovski.xcodeproj/xcuserdata
 Rovski.xcodeproj/project.xcworkspace/*
