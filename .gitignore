@@ -6,3 +6,5 @@ Rovski.xcodeproj/project.xcworkspace/*
 Rovski.xcodeproj/.idea/*
 *.swp
 .idea
+.DS_Store
+Rovski/.DS_Store

@@ -1032,32 +1032,6 @@ bool Rovski::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
     return true;
 }
 
-bool Rovski::CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size) {
-    VkCommandBufferAllocateInfo cmdBufferAllocInfo{};
-    cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdBufferAllocInfo.commandBufferCount = 1;
-    cmdBufferAllocInfo.commandPool = vkTransferCommandPool;
-    cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    VkCommandBuffer commandBuffer{};
-    vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &commandBuffer);
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-    VkBufferCopy copyRegion{};
-    copyRegion.size = size;
-    copyRegion.dstOffset = 0;
-    copyRegion.srcOffset = 0;
-    vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
-    vkEndCommandBuffer(commandBuffer);
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-    vkQueueSubmit(vkTransferQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(vkTransferQueue);
-    return true;
-}
 bool Rovski::CreateIndexBuffer() {
     VkDeviceSize size = sizeof(Indexes[0]) * Indexes.size();
     VkBuffer stageBuffer;
@@ -1181,6 +1155,7 @@ bool Rovski::CreateTextureImage() {
     stbi_uc* pixels = stbi_load("/Users/luobin/Rovski/Rovski/Texture/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * texChannels;
     if (!pixels) {
+        std::cout << __LINE__ << std::endl;
         return false;
     }
     VkBuffer stagingBuffer;
@@ -1193,22 +1168,36 @@ bool Rovski::CreateTextureImage() {
     memcpy(data, pixels, imageSize);
     vkUnmapMemory(vkDevice, stagingMemory);
     stbi_image_free(pixels);
+
+    if (!CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vkTextureImage,
+                             vkTextureMemory)) {
+        std::cout << __LINE__ << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool Rovski::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
+                         VkImageUsageFlags usageFlags, VkMemoryPropertyFlags propertyFlags, VkImage &image,
+                         VkDeviceMemory &imageMemory) {
     VkImageCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     createInfo.imageType = VK_IMAGE_TYPE_2D;
     createInfo.extent.depth = 1;
-    createInfo.extent.width = texWidth;
-    createInfo.extent.height = texHeight;
+    createInfo.extent.width = width;
+    createInfo.extent.height = height;
     createInfo.mipLevels = 1;
     createInfo.arrayLayers = 1;
-    createInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-    createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    createInfo.format = format;
+    createInfo.tiling = tiling;
     createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    createInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    createInfo.usage = usageFlags;
     createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.flags = 0;
-    if (vkCreateImage(vkDevice, &createInfo, nullptr, &vkTextureImage) != VK_SUCCESS) {
+    if (vkCreateImage(vkDevice, &createInfo, nullptr, &image) != VK_SUCCESS) {
+        std::cout << __LINE__ << std::endl;
         return false;
     }
     VkMemoryRequirements memoryRequirements{};
@@ -1216,6 +1205,60 @@ bool Rovski::CreateTextureImage() {
     VkMemoryAllocateInfo allocateInfo{};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocateInfo.allocationSize = memoryRequirements.size;
-    allocateInfo.memoryTypeIndex = FindMemoryType()
+    allocateInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, propertyFlags);
+    if (VK_SUCCESS != vkAllocateMemory(vkDevice, &allocateInfo, nullptr, &imageMemory)) {
+        std::cout << __LINE__ << std::endl;
+        return false;
+    }
+    vkBindImageMemory(vkDevice, vkTextureImage, vkTextureMemory, 0);
+
     return true;
+}
+
+VkCommandBuffer Rovski::BeginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocateInfo.commandBufferCount = 1;
+    allocateInfo.commandPool = vkCommandPool;
+    allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(vkDevice, &allocateInfo, &commandBuffer);
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    return commandBuffer;
+}
+
+void Rovski::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
+    vkEndCommandBuffer(commandBuffer);
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    vkQueueSubmit(vkGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(vkGraphicsQueue);
+    vkFreeCommandBuffers(vkDevice, vkCommandPool, 1, &commandBuffer);
+}
+
+bool Rovski::CopyBuffer(VkBuffer &dst, VkBuffer &src, VkDeviceSize size) {
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+    VkBufferCopy region{};
+    region.size = size;
+    vkCmdCopyBuffer(commandBuffer, src, dst, 1, &region);
+    EndSingleTimeCommands(commandBuffer);
+    return true;
+}
+
+void Rovski::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+
+    EndSingleTimeCommands(commandBuffer);
 }
