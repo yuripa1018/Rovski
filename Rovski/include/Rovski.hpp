@@ -93,6 +93,10 @@ private:
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
     void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    bool CreateTextureImageView();
+    VkImageView CreateImageView(VkImage image, VkFormat format);
+    bool CreateTextureSampler();
 
     VkInstance vkInstance;
     GLFWwindow* window;
@@ -105,7 +109,7 @@ private:
     VkQueue vkGraphicsQueue;
     VkQueue vkPresentQueue;
     VkQueue vkTransferQueue;
-    VkPhysicalDeviceFeatures deviceFeatures{};
+    VkPhysicalDeviceFeatures vkDeviceFeatures{};
     VkSwapchainKHR vkSwapChain;
     std::vector<VkImage> vkSwapChainImages;
     VkFormat vkSwapChainFormat;
@@ -141,6 +145,8 @@ private:
     std::vector<VkDescriptorSet> vkDescriptorSet;
     VkImage vkTextureImage;
     VkDeviceMemory vkTextureMemory;
+    VkImageView vkTextureImageView;
+    VkSampler vkTextureSampler;
     
     static const std::vector<const char*> deviceExtensions;
     static const std::vector<const char*> validationLayers;

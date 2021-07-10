@@ -86,6 +86,10 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
 
 bool Rovski::Clean(){
     CleanUpSwapChain();
+    vkDestroySampler(vkDevice, vkTextureSampler, nullptr);
+    vkDestroyImageView(vkDevice, vkTextureImageView, nullptr);
+    vkDestroyImage(vkDevice, vkTextureImage, nullptr);
+    vkFreeMemory(vkDevice, vkTextureMemory, nullptr);
     vkDestroyBuffer(vkDevice, vkIndexBuffer, nullptr);
     vkFreeMemory(vkDevice, vkIndextBufferMemory, nullptr);
     vkDestroyBuffer(vkDevice, vkVertexBuffer, nullptr);
@@ -158,6 +162,14 @@ bool Rovski::InitVulkan(){
     }
     if (!CreateTextureImage()) {
         std::cout << "failed to create texture image" << std::endl;
+        return false;
+    }
+    if (!CreateTextureImageView()) {
+        std::cout << "failed to create texture image view" << std::endl;
+        return false;
+    }
+    if (!CreateTextureSampler()) {
+        std::cout << "failed to create texture sampler" << std::endl;
         return false;
     }
     if (!CreateVertexBuffer()) {
@@ -337,12 +349,14 @@ int Rovski::RateDevice(VkPhysicalDevice device){
     int score = 0;
     VkPhysicalDeviceProperties devicePropoerties{};
     vkGetPhysicalDeviceProperties(device, &devicePropoerties);
-    VkPhysicalDeviceFeatures deviceFeatures{};
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+    vkGetPhysicalDeviceFeatures(device, &vkDeviceFeatures);
+    if (vkDeviceFeatures.samplerAnisotropy != VK_TRUE) {
+        score -= 100000;
+    }
     if (devicePropoerties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
         score += 100;
     }
-    if (deviceFeatures.geometryShader) {
+    if (vkDeviceFeatures.geometryShader) {
         score += 100;
     }
     
@@ -413,7 +427,7 @@ bool Rovski::CreateLogicalDevice(){
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceCreateInfo.pQueueCreateInfos = queueInfos.data();
     deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
-    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+    deviceCreateInfo.pEnabledFeatures = &vkDeviceFeatures;
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
     if (enableValidationLayers) {
@@ -549,22 +563,10 @@ bool Rovski::CreateSwapChain(){
 bool Rovski::CreateImageViews(){
     vkSwapChainImageViews.resize(vkSwapChainImages.size());
     for (int i = 0; i < vkSwapChainImages.size(); i++) {
-        auto &image = vkSwapChainImages[i];
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = image;
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = vkSwapChainFormat;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.layerCount = 1;
-        vkCreateImageView(vkDevice, &createInfo, nullptr, vkSwapChainImageViews.data() + i);
+        vkSwapChainImageViews[i] = CreateImageView(vkSwapChainImages[i], vkSwapChainFormat);
+        if(vkSwapChainImageViews[i] == VK_NULL_HANDLE) {
+            return false;
+        }
     }
     return true;
 }
@@ -1153,7 +1155,7 @@ bool Rovski::CreateDescriptorSet() {
 bool Rovski::CreateTextureImage() {
     int texHeight, texWidth, texChannels;
     stbi_uc* pixels = stbi_load("/Users/luobin/Rovski/Rovski/Texture/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    VkDeviceSize imageSize = texWidth * texHeight * texChannels;
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
     if (!pixels) {
         std::cout << __LINE__ << std::endl;
         return false;
@@ -1175,6 +1177,12 @@ bool Rovski::CreateTextureImage() {
         std::cout << __LINE__ << std::endl;
         return false;
     }
+    TransitionImageLayout(vkTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    std::cout << texHeight << "x" << texWidth << "=" << texHeight * texWidth << ", channels: " << texChannels << std::endl;
+    CopyBufferToImage(stagingBuffer, vkTextureImage, texWidth, texHeight);
+    TransitionImageLayout(vkTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkDestroyBuffer(vkDevice, stagingBuffer, nullptr);
+    vkFreeMemory(vkDevice, stagingMemory, nullptr);
     return true;
 }
 
@@ -1211,7 +1219,6 @@ bool Rovski::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkIma
         return false;
     }
     vkBindImageMemory(vkDevice, vkTextureImage, vkTextureMemory, 0);
-
     return true;
 }
 
@@ -1259,6 +1266,104 @@ void Rovski::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
 
+    VkPipelineStageFlags srcStage, dstStage;
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
+        std::cout << "Invalid transition type!" << std::endl;
+    }
+
+    vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     EndSingleTimeCommands(commandBuffer);
+}
+
+void Rovski::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+    VkBufferImageCopy region{};
+    region.bufferImageHeight = 0;
+    region.bufferRowLength = 0;
+    region.bufferOffset = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageOffset = {0,0,0};
+    region.imageExtent = {width, height, 1};
+    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    EndSingleTimeCommands(commandBuffer);
+}
+
+bool Rovski::CreateTextureImageView() {
+    vkTextureImageView = CreateImageView(vkTextureImage, VK_FORMAT_R8G8B8A8_SRGB);
+    if (vkTextureImageView == VK_NULL_HANDLE) {
+        return false;
+    }
+    return true;
+}
+VkImageView Rovski::CreateImageView(VkImage image, VkFormat format) {
+    VkImageViewCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = image;
+    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.format = format;
+    createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.baseMipLevel = 0;
+    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.layerCount = 1;
+    VkImageView imageView;
+    if (VK_SUCCESS != vkCreateImageView(vkDevice, &createInfo, nullptr, &imageView)) {
+        return VK_NULL_HANDLE;
+    }
+    return imageView;
+}
+
+bool Rovski::CreateTextureSampler() {
+    VkSamplerCreateInfo createInfo{};
+    VkPhysicalDeviceProperties deviceProperties{};
+    vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
+    createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    createInfo.magFilter = VK_FILTER_LINEAR;
+    createInfo.minFilter = VK_FILTER_LINEAR;
+    createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    if (vkDeviceFeatures.samplerAnisotropy == VK_TRUE) {
+        createInfo.anisotropyEnable = VK_TRUE;
+        createInfo.maxAnisotropy = deviceProperties.limits.maxSamplerAnisotropy;
+    } else {
+        createInfo.anisotropyEnable = VK_FALSE;
+        createInfo.maxAnisotropy = 0.0f;
+    }
+    createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    createInfo.unnormalizedCoordinates = VK_FALSE;
+    createInfo.compareEnable = VK_FALSE;
+    createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    createInfo.mipLodBias = 0.0f;
+    createInfo.minLod = 0.0f;
+    createInfo.maxLod = 0.0f;
+    if (VK_SUCCESS != vkCreateSampler(vkDevice, &createInfo, nullptr, &vkTextureSampler)) {
+        return false;
+    }
+
+    return true;
 }
