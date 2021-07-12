@@ -20,15 +20,34 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+Vertex v = std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f});
 std::vector<Vertex> Vertices = {
-        {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+        std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}),
+        std::make_tuple(glm::vec3{0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.0f, 0.0f}),
+        std::make_tuple(glm::vec3{0.5f, 0.5f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 1.0f}),
+        std::make_tuple(glm::vec3{-0.5f, 0.5f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}),
+
+        std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}),
+        std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}),
+        std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}),
+        std::make_tuple(glm::vec3{-0.5f, -0.5f, 0.0f}, glm::vec3{1.0f, 1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}),
 };
 
+
+
+
+/*
+
+        {{-0.5f, -0.5f, -0.5}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+        {{0.5f, -0.5f, -0.5}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+        {{0.5f, 0.5f, -0.5}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+        {{-0.5f, 0.5f, -0.5}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}
+};
+ */
+
 std::vector<uint16_t> Indexes = {
-        0,1,2,2,3,0
+        0,1,2,2,3,0,
+        4,5,6,6,7,4
 };
 
 struct UniformBufferObject {
@@ -86,6 +105,7 @@ bool Rovski::Init(uint32_t windowWidth, uint32_t windowHeight, uint32_t maxFrame
 
 bool Rovski::Clean(){
     CleanUpSwapChain();
+    vkDestroyDescriptorSetLayout(vkDevice, vkDescriptorSetLayout, nullptr);
     vkDestroySampler(vkDevice, vkTextureSampler, nullptr);
     vkDestroyImageView(vkDevice, vkTextureImageView, nullptr);
     vkDestroyImage(vkDevice, vkTextureImage, nullptr);
@@ -1061,10 +1081,19 @@ bool Rovski::CreateDescriptorLayout() {
     uboLayoutBinding.descriptorCount = 1;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.binding = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.pImmutableSamplers = nullptr;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     VkDescriptorSetLayoutCreateInfo createInfo{};
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
     createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    createInfo.bindingCount = 1;
-    createInfo.pBindings = &uboLayoutBinding;
+    createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    createInfo.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(vkDevice, &createInfo, nullptr, &vkDescriptorSetLayout)!=VK_SUCCESS) {
         return false;
     }
@@ -1105,13 +1134,16 @@ void Rovski::UpdateTime() {
 }
 
 bool Rovski::CreateDescriptorPool() {
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(vkSwapChainImages.size());
+    std::array<VkDescriptorPoolSize,2> poolSize{};
+    poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize[0].descriptorCount = static_cast<uint32_t>(vkSwapChainImages.size());
+    poolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize[1].descriptorCount = static_cast<uint32_t>(vkSwapChainImages.size());
+
     VkDescriptorPoolCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    createInfo.poolSizeCount = 1;
-    createInfo.pPoolSizes = &poolSize;
+    createInfo.poolSizeCount = static_cast<uint32_t>(poolSize.size());
+    createInfo.pPoolSizes = poolSize.data();
     createInfo.maxSets = static_cast<uint32_t>(vkSwapChainImages.size());
     if (VK_SUCCESS != vkCreateDescriptorPool(vkDevice, &createInfo, nullptr, &vkDescriptorPool)) {
         return false;
@@ -1137,17 +1169,31 @@ bool Rovski::CreateDescriptorSet() {
         bufferInfo.buffer = vkUniformBuffers[i];
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject);
-        VkWriteDescriptorSet descritorSet{};
-        descritorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descritorSet.dstSet = vkDescriptorSet[i];
-        descritorSet.dstBinding = 0;
-        descritorSet.dstArrayElement = 0;
-        descritorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descritorSet.descriptorCount = 1;
-        descritorSet.pBufferInfo = &bufferInfo;
-        descritorSet.pImageInfo = nullptr;
-        descritorSet.pTexelBufferView = nullptr;
-        vkUpdateDescriptorSets(vkDevice, 1, &descritorSet, 0, nullptr);
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageView = vkTextureImageView;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.sampler = vkTextureSampler;
+
+        std::array<VkWriteDescriptorSet,2> descriptorSet = {};
+        descriptorSet[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorSet[0].dstSet = vkDescriptorSet[i];
+        descriptorSet[0].dstBinding = 0;
+        descriptorSet[0].dstArrayElement = 0;
+        descriptorSet[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorSet[0].descriptorCount = 1;
+        descriptorSet[0].pBufferInfo = &bufferInfo;
+        descriptorSet[0].pImageInfo = nullptr;
+        descriptorSet[0].pTexelBufferView = nullptr;
+
+        descriptorSet[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorSet[1].dstSet = vkDescriptorSet[i];
+        descriptorSet[1].dstBinding = 1;
+        descriptorSet[1].dstArrayElement = 0;
+        descriptorSet[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorSet[1].descriptorCount = 1;
+        descriptorSet[1].pBufferInfo = &bufferInfo;
+        descriptorSet[1].pImageInfo = &imageInfo;
+        vkUpdateDescriptorSets(vkDevice, static_cast<uint32_t>(descriptorSet.size()), descriptorSet.data(), 0, nullptr);
     }
     return true;
 }
